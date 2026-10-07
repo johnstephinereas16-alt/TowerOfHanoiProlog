@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Tower of Hanoi — Prolog Powered</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="page">
+    <header>
+      <h1>Tower of Hanoi</h1>
+      <p class="subtitle">Prolog · Animated</p>
+      <p class="subtitle">John Stephine C. Reas</p>
+    </header>
+
+    <section class="controls">
+      <label for="disks">Disks</label>
+      <input id="disks" type="number" min="1" max="10" value="3" />
+      <button id="solveBtn">Solve</button>
+      <span id="status"></span>
+    </section>
+
+    <main class="board-wrap">
+      <div class="board">
+        <div class="tower" data-tower="a"><div class="peg"></div><div class="base"></div></div>
+        <div class="tower" data-tower="b"><div class="peg"></div><div class="base"></div></div>
+        <div class="tower" data-tower="c"><div class="peg"></div><div class="base"></div></div>
+      </div>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

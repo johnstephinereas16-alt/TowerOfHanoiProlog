@@ -1,0 +1,287 @@
+/* ============================================================
+   Tower of Hanoi — "Midnight Arcade" theme
+   All layout uses explicit, predictable dimensions.
+   ============================================================ */
+
+:root {
+  /* Geometry — the single source of truth */
+  --peg-height:   260px;
+  --base-height:  18px;
+  --disk-unit:    28px;
+  --tower-width:  220px;
+  --tower-gap:    40px;
+  --board-pad-x:  24px;
+  --board-height: calc(var(--peg-height) + var(--base-height) + 40px);
+  --move-duration: 350ms;
+
+  /* Palette */
+  --bg-deep:    #050510;
+  --ink:        #f0f0ff;
+  --ink-dim:    #8a8aa8;
+  --accent:     #00f0ff;
+  --accent-2:   #ff2d95;
+  --glass:      rgba(255,255,255,0.06);
+  --glass-edge: rgba(255,255,255,0.12);
+}
+
+* { box-sizing: border-box; }
+
+html, body { height: 100%; }
+
+body {
+  margin: 0;
+  font-family: 'Space Grotesk', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  color: var(--ink);
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  background:
+    radial-gradient(ellipse at 20% 0%, #14143a 0%, transparent 55%),
+    radial-gradient(ellipse at 80% 100%, #2a0b3d 0%, transparent 55%),
+    var(--bg-deep);
+  position: relative;
+  overflow-x: hidden;
+}
+
+/* Animated aurora blobs */
+body::before,
+body::after {
+  content: "";
+  position: fixed;
+  width: 55vmax;
+  height: 55vmax;
+  border-radius: 50%;
+  filter: blur(120px);
+  opacity: 0.32;
+  pointer-events: none;
+  z-index: 0;
+}
+body::before {
+  top: -20vmax; left: -20vmax;
+  background: radial-gradient(circle, var(--accent) 0%, transparent 65%);
+  animation: drift1 22s ease-in-out infinite alternate;
+}
+body::after {
+  bottom: -25vmax; right: -25vmax;
+  background: radial-gradient(circle, var(--accent-2) 0%, transparent 65%);
+  animation: drift2 26s ease-in-out infinite alternate;
+}
+@keyframes drift1 {
+  from { transform: translate(0, 0) scale(1); }
+  to   { transform: translate(8vmax, 6vmax) scale(1.15); }
+}
+@keyframes drift2 {
+  from { transform: translate(0, 0) scale(1.1); }
+  to   { transform: translate(-7vmax, -5vmax) scale(1); }
+}
+
+/* ============================================================
+   The single, centered page column
+   ============================================================ */
+.page {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 32px 16px 48px;
+  width: 100%;
+  max-width: 900px;
+}
+
+/* ---------- Header ---------- */
+header { text-align: center; }
+
+h1 {
+  margin: 0;
+  font-size: clamp(2rem, 4vw, 2.75rem);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  background: linear-gradient(90deg, var(--accent) 0%, #a78bfa 50%, var(--accent-2) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: 0 0 40px rgba(0,240,255,0.2);
+}
+
+.subtitle {
+  margin: 6px 0 0;
+  color: var(--ink-dim);
+  font-size: 0.75rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  font-weight: 500;
+}
+
+/* ---------- Controls (frosted glass) ---------- */
+.controls {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  margin: 28px 0 40px;
+  padding: 12px 18px;
+  background: var(--glass);
+  border: 1px solid var(--glass-edge);
+  border-radius: 16px;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4),
+              inset 0 1px 0 rgba(255,255,255,0.06);
+}
+
+.controls label {
+  color: var(--ink-dim);
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 500;
+}
+
+.controls input {
+  width: 72px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--glass-edge);
+  background: rgba(0,0,0,0.3);
+  color: var(--ink);
+  font-size: 1rem;
+  font-family: inherit;
+  text-align: center;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.controls input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(0,240,255,0.15);
+}
+
+.controls button {
+  padding: 10px 24px;
+  border-radius: 10px;
+  border: none;
+  background: linear-gradient(135deg, var(--accent) 0%, #a78bfa 100%);
+  color: #050510;
+  font-weight: 700;
+  font-family: inherit;
+  font-size: 0.9rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.2s ease, filter 0.15s;
+  box-shadow: 0 0 24px rgba(0,240,255,0.35);
+}
+.controls button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 0 36px rgba(0,240,255,0.55);
+  filter: brightness(1.1);
+}
+.controls button:active { transform: translateY(0); }
+.controls button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  filter: grayscale(0.5);
+  box-shadow: none;
+}
+
+#status {
+  color: var(--ink-dim);
+  font-size: 0.8rem;
+  min-width: 120px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.05em;
+}
+
+/* ============================================================
+   Board
+   Fixed width so centering is deterministic.
+   Disks are positioned relative to the BOARD's coordinate system.
+   ============================================================ */
+.board-wrap {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
+.board {
+  position: relative;
+  width: calc(var(--tower-width) * 3 + var(--tower-gap) * 2 + var(--board-pad-x) * 2);
+  height: var(--board-height);
+  /* base sits at bottom: 0 inside this box */
+}
+
+.tower {
+  position: absolute;
+  bottom: 0;
+  width: var(--tower-width);
+  height: 100%;
+}
+.tower[data-tower="a"] { left: calc(var(--board-pad-x)); }
+.tower[data-tower="b"] { left: calc(var(--board-pad-x) + var(--tower-width) + var(--tower-gap)); }
+.tower[data-tower="c"] { left: calc(var(--board-pad-x) + (var(--tower-width) + var(--tower-gap)) * 2); }
+
+/* Peg — from top of base up */
+.peg {
+  position: absolute;
+  bottom: var(--base-height);
+  left: 50%;
+  transform: translateX(-50%);
+  width: 12px;
+  height: var(--peg-height);
+  background: linear-gradient(180deg,
+              #6b7390 0%,
+              #3a3f57 40%,
+              #2a2d3f 100%);
+  border-radius: 6px 6px 0 0;
+  box-shadow: 0 0 20px rgba(0,240,255,0.08),
+              inset 1px 0 0 rgba(255,255,255,0.15);
+}
+
+/* Base — full width of the tower, sits at the bottom */
+.base {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: var(--base-height);
+  background: linear-gradient(180deg,
+              rgba(120,140,200,0.28) 0%,
+              rgba(60,70,110,0.55) 100%);
+  border: 1px solid rgba(140,160,220,0.22);
+  border-radius: 10px;
+  box-shadow: 0 6px 22px rgba(0,0,0,0.5),
+              0 0 30px rgba(0,240,255,0.06);
+  backdrop-filter: blur(4px);
+}
+
+/* ============================================================
+   Disks — absolute children of .board
+   Left edge computed by JS; bottom = base + index * disk-unit.
+   ============================================================ */
+.disk {
+  position: absolute;
+  height: var(--disk-unit);
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.22);
+  transition: left var(--move-duration) cubic-bezier(.4,0,.2,1),
+              bottom var(--move-duration) cubic-bezier(.4,0,.2,1);
+  will-change: left, bottom;
+  box-shadow:
+    inset 0 -6px 10px rgba(0,0,0,0.35),
+    inset 0 6px 10px rgba(255,255,255,0.3),
+    0 6px 20px rgba(0,0,0,0.35),
+    0 0 24px var(--glow, rgba(255,255,255,0.15));
+}
+
+.disk::before {
+  content: "";
+  position: absolute;
+  top: 15%;
+  left: 8%;
+  right: 8%;
+  height: 22%;
+  border-radius: 999px;
+  background: linear-gradient(180deg,
+              rgba(255,255,255,0.45) 0%,
+              rgba(255,255,255,0) 100%);
+  pointer-events: none;
+}
