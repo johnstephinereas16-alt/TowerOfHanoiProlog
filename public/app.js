@@ -1,79 +1,116 @@
-// ============================================================
-//  Tower of Hanoi — frontend animation
-//  All positions are computed in BOARD-space.
-//  Base sits at bottom: 0 inside .board.
-//  Disks sit at  bottom: BASE_H + index * DISK_UNIT.
-// ============================================================
+// Tower of Hanoi - click a peg to pick up a disk, click another peg to drop it.
+// Wrong move = lose a life. "Solve (Prolog)" asks the server and animates the answer.
 
-const TOWER_IDS  = ['a', 'b', 'c'];
-const DISK_UNIT  = 28;   // must match --disk-unit
-const BASE_H     = 18;   // must match --base-height
-const PEG_HEIGHT = 260;  // must match --peg-height
-const MOVE_MS    = 350;  // must match --move-duration
-const LIFT_Y     = BASE_H + PEG_HEIGHT;  // top of the peg
+const TOWER_IDS = ['a', 'b', 'c'];
+const MAX_HEARTS = 3;
+const DISK_UNIT = 26;   // same as --disk-unit
+const BASE_H = 14;      // same as --base-height
+const PEG_HEIGHT = 260; // same as --peg-height
+const NORMAL_MS = 350;
+const LIFT_Y = BASE_H + PEG_HEIGHT;
 
-const boardEl    = document.querySelector('.board');
+const COLORS = ['#e63946', '#f77f00', '#f4c430', '#4caf50', '#00b894',
+                '#00b4d8', '#4361ee', '#7b61ff', '#d63384', '#8d6e63'];
+
+const boardEl = document.getElementById('board');
 const disksInput = document.getElementById('disks');
-const solveBtn   = document.getElementById('solveBtn');
-const statusEl   = document.getElementById('status');
+const newBtn = document.getElementById('newBtn');
+const solveBtn = document.getElementById('solveBtn');
+const skipBtn = document.getElementById('skipBtn');
+const statusEl = document.getElementById('status');
+const heartsEl = document.getElementById('hearts');
+const movesEl = document.getElementById('moves');
+const bestEl = document.getElementById('best');
+const overlayEl = document.getElementById('overlay');
+const speedBtns = document.querySelectorAll('.speed');
+const traceEl = document.getElementById('trace');
 
-let towers  = { a: [], b: [], c: [] };
+let towers = { a: [], b: [], c: [] };
 let diskEls = new Map();
-let animating = false;
+let diskCount = 3;
+let hearts = MAX_HEARTS;
+let moves = 0;
+let selected = null;
+let busy = false;
+let locked = false;
 
-// Neon arcade palette — one per disk size (index 0 = smallest disk)
-const DISK_STYLES = [
-  { fill: 'linear-gradient(180deg, #ff8a8a 0%, #e63946 100%)', glow: 'rgba(230,57,70,0.55)'  },
-  { fill: 'linear-gradient(180deg, #ffb26b 0%, #f77f00 100%)', glow: 'rgba(247,127,0,0.55)'  },
-  { fill: 'linear-gradient(180deg, #ffe066 0%, #f4c430 100%)', glow: 'rgba(244,196,48,0.55)' },
-  { fill: 'linear-gradient(180deg, #b7f07a 0%, #4caf50 100%)', glow: 'rgba(76,175,80,0.55)'  },
-  { fill: 'linear-gradient(180deg, #7ff0c6 0%, #00b894 100%)', glow: 'rgba(0,184,148,0.55)'  },
-  { fill: 'linear-gradient(180deg, #7ad7f0 0%, #00b4d8 100%)', glow: 'rgba(0,180,216,0.55)'  },
-  { fill: 'linear-gradient(180deg, #8ab6ff 0%, #4361ee 100%)', glow: 'rgba(67,97,238,0.55)'  },
-  { fill: 'linear-gradient(180deg, #b8a1ff 0%, #7b61ff 100%)', glow: 'rgba(123,97,255,0.55)' },
-  { fill: 'linear-gradient(180deg, #ff9bd9 0%, #d63384 100%)', glow: 'rgba(214,51,132,0.55)' },
-  { fill: 'linear-gradient(180deg, #ff9ec7 0%, #ff2d95 100%)', glow: 'rgba(255,45,149,0.55)' },
-];
+let stepMs = NORMAL_MS;  // time of one animation step (changed by speed buttons)
+let skipping = false;    // true when the user pressed Skip
 
-function towerEl(id) {
-  return document.querySelector(`[data-tower="${id}"]`);
+const wait = ms => new Promise(r => setTimeout(r, ms));
+const sizeOf = id => parseInt(id.slice(1), 10);
+const topOf = t => towers[t][towers[t].length - 1];
+const minMoves = n => Math.pow(2, n) - 1;
+const towerEl = id => document.querySelector(`[data-tower="${id}"]`);
+const say = text => { statusEl.textContent = text; };
+
+// ---------- move tracer ----------
+function clearTrace() { traceEl.innerHTML = ''; }
+
+function addTrace(from, to, bad) {
+  const prev = traceEl.querySelector('.now');
+  if (prev) prev.classList.remove('now');
+  const li = document.createElement('li');
+  li.textContent = `${from.toUpperCase()} \u2192 ${to.toUpperCase()}` + (bad ? '  (wrong)' : '');
+  li.className = bad ? 'bad' : 'now';
+  traceEl.appendChild(li);
+  traceEl.scrollTop = traceEl.scrollHeight;
 }
 
-// Center of a tower's base, in board-relative coordinates.
-function pegCenterX(towerId) {
-  const towerRect = towerEl(towerId).getBoundingClientRect();
-  const boardRect = boardEl.getBoundingClientRect();
-  return (towerRect.left - boardRect.left) + towerRect.width / 2;
+function setDuration(ms) {
+  document.documentElement.style.setProperty('--move-duration', ms + 'ms');
 }
 
-function positionFor(towerId, diskId, index) {
-  const el    = diskEls.get(diskId);
-  const width = parseFloat(el.style.width);
-  const left   = pegCenterX(towerId) - width / 2;
-  const bottom = BASE_H + index * DISK_UNIT;
-  return { left, bottom };
+function pegCenterX(t) {
+  const tr = towerEl(t).getBoundingClientRect();
+  const br = boardEl.getBoundingClientRect();
+  return tr.left - br.left + tr.width / 2;
+}
+
+function positionFor(t, diskId, index) {
+  const width = parseFloat(diskEls.get(diskId).style.width);
+  return { left: pegCenterX(t) - width / 2, bottom: BASE_H + index * DISK_UNIT };
+}
+
+function applyWidths() {
+  const towerW = towerEl('a').getBoundingClientRect().width;
+  const minW = towerW < 120 ? 30 : 50;
+  const step = diskCount > 1 ? Math.min(14, (towerW - 10 - minW) / (diskCount - 1)) : 0;
+  for (const [id, el] of diskEls) {
+    el.style.width = (minW + (sizeOf(id) - 1) * step) + 'px';
+  }
+}
+
+function renderHearts() {
+  heartsEl.innerHTML = '';
+  for (let i = 0; i < MAX_HEARTS; i++) {
+    const s = document.createElement('span');
+    s.textContent = '♥';
+    if (i >= hearts) s.className = 'lost';
+    heartsEl.appendChild(s);
+  }
+}
+
+function updateHud() {
+  movesEl.textContent = moves;
+  bestEl.textContent = minMoves(diskCount);
 }
 
 function setupTowers(n) {
   document.querySelectorAll('.disk').forEach(el => el.remove());
-  towers  = { a: [], b: [], c: [] };
+  towers = { a: [], b: [], c: [] };
   diskEls = new Map();
-
+  diskCount = n;
   for (let size = n; size >= 1; size--) {
-    const id    = `d${size}`;
-    const style = DISK_STYLES[(size - 1) % DISK_STYLES.length];
-
+    const id = 'd' + size;
     const el = document.createElement('div');
     el.className = 'disk';
-    el.style.width      = `${60 + size * 18}px`;
-    el.style.background = style.fill;
-    el.style.setProperty('--glow', style.glow);
-    el.dataset.disk = id;
-
+    el.style.background = COLORS[(size - 1) % COLORS.length];
     boardEl.appendChild(el);
     diskEls.set(id, el);
     towers.a.push(id);
   }
+  applyWidths();
   renderAll();
 }
 
@@ -82,71 +119,232 @@ function renderAll() {
     towers[t].forEach((id, idx) => {
       const { left, bottom } = positionFor(t, id, idx);
       const el = diskEls.get(id);
-      el.style.left   = `${left}px`;
-      el.style.bottom = `${bottom}px`;
+      el.style.left = left + 'px';
+      el.style.bottom = (selected === t && idx === towers[t].length - 1 ? LIFT_Y : bottom) + 'px';
     });
   }
 }
 
-const wait = ms => new Promise(r => setTimeout(r, ms));
+function clearSelection() {
+  document.querySelectorAll('.tower.selected').forEach(t => t.classList.remove('selected'));
+  selected = null;
+}
 
+function readDiskCount() {
+  let n = parseInt(disksInput.value, 10);
+  if (!n || n < 1) n = 3;
+  if (n > 10) n = 10;
+  disksInput.value = n;
+  return n;
+}
+
+function startGame(n = readDiskCount()) {
+  disksInput.value = n;
+  clearSelection();
+  overlayEl.classList.add('hidden');
+  overlayEl.innerHTML = '';
+  hearts = MAX_HEARTS;
+  moves = 0;
+  busy = false;
+  locked = false;
+  setDuration(NORMAL_MS);
+  clearTrace();
+  renderHearts();
+  setupTowers(n);
+  updateHud();
+  say('Move all disks to peg 3.');
+}
+
+// ---------- playing ----------
+async function onTowerClick(id) {
+  if (busy || locked) return;
+
+  if (selected === null) {
+    if (!towers[id].length) { say('That peg is empty.'); return; }
+    selected = id;
+    diskEls.get(topOf(id)).style.bottom = LIFT_Y + 'px';
+    towerEl(id).classList.add('selected');
+    say('Now click where to drop it.');
+    return;
+  }
+
+  if (selected === id) {
+    diskEls.get(topOf(id)).style.bottom = (BASE_H + (towers[id].length - 1) * DISK_UNIT) + 'px';
+    clearSelection();
+    say('');
+    return;
+  }
+
+  await tryMove(selected, id);
+}
+
+async function tryMove(from, to) {
+  busy = true;
+  const diskId = topOf(from);
+  const diskEl = diskEls.get(diskId);
+  const destTop = topOf(to);
+
+  if (destTop && sizeOf(diskId) > sizeOf(destTop)) {
+    hearts--;
+    renderHearts();
+    addTrace(from, to, true);
+    diskEl.classList.add('shake');
+    towerEl(to).classList.add('wrong');
+    say('Wrong move! Big disk cannot go on a small disk.');
+    await wait(450);
+    diskEl.classList.remove('shake');
+    towerEl(to).classList.remove('wrong');
+    diskEl.style.bottom = (BASE_H + (towers[from].length - 1) * DISK_UNIT) + 'px';
+    clearSelection();
+    await wait(NORMAL_MS);
+    if (hearts <= 0) gameOver();
+    busy = false;
+    return;
+  }
+
+  towers[from].pop();
+  towerEl(from).classList.remove('selected');
+  selected = null;
+
+  const { left, bottom } = positionFor(to, diskId, towers[to].length);
+  diskEl.style.left = left + 'px';
+  await wait(NORMAL_MS);
+  towers[to].push(diskId);
+  diskEl.style.bottom = bottom + 'px';
+  await wait(NORMAL_MS);
+
+  moves++;
+  updateHud();
+  addTrace(from, to, false);
+  say('Good move!');
+  if (towers.c.length === diskCount) win();
+  busy = false;
+}
+
+function showOverlay(html) {
+  overlayEl.innerHTML = html;
+  overlayEl.classList.remove('hidden');
+}
+
+function gameOver() {
+  locked = true;
+  say('Game over.');
+  showOverlay('<div class="card"><h2>Game Over</h2><p>No lives left.</p>' +
+              '<button data-action="again">Try Again</button></div>');
+}
+
+function win() {
+  locked = true;
+  say('You solved it!');
+  showOverlay('<div class="card"><h2>You Win!</h2>' +
+    `<p>${moves} moves (best: ${minMoves(diskCount)})</p>` +
+    '<button data-action="again">Play Again</button>' +
+    (diskCount < 10 ? '<button data-action="next">Next Level</button>' : '') +
+    '</div>');
+}
+
+// ---------- Prolog solver ----------
 async function animateMove(from, to) {
   const diskId = towers[from].pop();
   const diskEl = diskEls.get(diskId);
+  const { left, bottom } = positionFor(to, diskId, towers[to].length);
 
-  // 1. Lift straight up to just above the peg
-  diskEl.style.bottom = `${LIFT_Y}px`;
-  await wait(MOVE_MS);
-
-  // 2. Slide horizontally to the destination peg's center
-  const targetIndex = towers[to].length;
-  const { left: targetLeft, bottom: targetBottom } =
-        positionFor(to, diskId, targetIndex);
-  diskEl.style.left = `${targetLeft}px`;
-  await wait(MOVE_MS);
-
-  // 3. Drop onto the stack
+  diskEl.style.bottom = LIFT_Y + 'px';   // lift
+  await wait(stepMs);
+  diskEl.style.left = left + 'px';       // slide
+  await wait(stepMs);
   towers[to].push(diskId);
-  diskEl.style.bottom = `${targetBottom}px`;
-  await wait(MOVE_MS);
+  diskEl.style.bottom = bottom + 'px';   // drop
+  await wait(stepMs);
 }
 
 async function solve() {
-  if (animating) return;
-  const n = parseInt(disksInput.value, 10);
-  if (!n || n < 1 || n > 10) return;
-
-  animating = true;
+  if (busy) return;
+  const n = readDiskCount();
+  startGame(n);
+  busy = true;
+  locked = true;
+  skipping = false;
+  newBtn.disabled = true;
   solveBtn.disabled = true;
-  statusEl.textContent = 'Querying Prolog…';
-
-  setupTowers(n);
-  await wait(30);
+  disksInput.disabled = true;
+  skipBtn.disabled = false;
+  setDuration(stepMs);
+  say('Asking Prolog...');
 
   try {
-    const res  = await fetch(`/solve?disks=${n}`);
+    const res = await fetch('/solve?disks=' + n);
     const data = await res.json();
     if (data.error) throw new Error(data.error);
 
-    const total = data.moves.length;
-    let done = 0;
-    statusEl.textContent = `0 / ${total} moves`;
+    const list = data.moves;
+    const total = list.length;
+    let i = 0;
 
-    for (const mv of data.moves) {
-      await animateMove(mv.from, mv.to);
-      done++;
-      statusEl.textContent = `${done} / ${total} moves`;
+    for (; i < total && !skipping; i++) {
+      await animateMove(list[i].from, list[i].to);
+      moves = i + 1;
+      updateHud();
+      addTrace(list[i].from, list[i].to, false);
+      say(`Prolog is solving: ${moves} / ${total}`);
     }
-    statusEl.textContent = `✔ Solved in ${total} moves`;
+
+    // Skip pressed: finish the rest instantly
+    if (skipping && i < total) {
+      for (; i < total; i++) {
+        towers[list[i].to].push(towers[list[i].from].pop());
+        addTrace(list[i].from, list[i].to, false);
+      }
+      moves = total;
+      updateHud();
+      boardEl.classList.add('no-anim');
+      renderAll();
+      void boardEl.offsetWidth;
+      boardEl.classList.remove('no-anim');
+    }
+    say(`Prolog solved it in ${total} moves. Press New Game to play.`);
   } catch (err) {
-    statusEl.textContent = `Error: ${err.message}`;
+    say('Error: ' + err.message);
     console.error(err);
   } finally {
-    animating = false;
+    busy = false;
+    setDuration(NORMAL_MS);
+    newBtn.disabled = false;
     solveBtn.disabled = false;
+    disksInput.disabled = false;
+    skipBtn.disabled = true;
   }
 }
 
+// ---------- events ----------
+document.querySelectorAll('.tower').forEach(t => {
+  t.addEventListener('click', () => onTowerClick(t.dataset.tower));
+});
+
+overlayEl.addEventListener('click', e => {
+  const action = e.target.dataset.action;
+  if (action === 'again') startGame(diskCount);
+  if (action === 'next') startGame(Math.min(10, diskCount + 1));
+});
+
+speedBtns.forEach(b => b.addEventListener('click', () => {
+  speedBtns.forEach(x => x.classList.remove('active'));
+  b.classList.add('active');
+  stepMs = parseInt(b.dataset.ms, 10);
+  if (busy && !skipBtn.disabled) setDuration(stepMs); // works while solving
+}));
+
+skipBtn.addEventListener('click', () => { skipping = true; });
+newBtn.addEventListener('click', () => { if (!busy) startGame(); });
 solveBtn.addEventListener('click', solve);
-window.addEventListener('resize', renderAll);
-setupTowers(3);
+disksInput.addEventListener('change', () => { if (!busy) startGame(); });
+
+window.addEventListener('keydown', e => {
+  if (e.target === disksInput) return;
+  const map = { '1': 'a', '2': 'b', '3': 'c' };
+  if (map[e.key]) onTowerClick(map[e.key]);
+});
+
+window.addEventListener('resize', () => { applyWidths(); renderAll(); });
+
+startGame(3);
