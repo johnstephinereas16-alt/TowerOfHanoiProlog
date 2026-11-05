@@ -1,4 +1,3 @@
-% Tower of Hanoi - pure logic solver
 hanoi(0, _, _, _, []) :- !.
 hanoi(N, From, To, Via, Moves) :-
     N > 0,
