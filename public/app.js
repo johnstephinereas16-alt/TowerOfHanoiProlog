@@ -1,8 +1,7 @@
 // Tower of Hanoi - click a peg to pick up a disk, click another peg to drop it.
-// Wrong move = lose a life. "Solve (Prolog)" asks the server and animates the answer.
+// Wrong move = not allowed (the disk goes back). "Auto Solve" asks the server and animates the answer.
 
 const TOWER_IDS = ['a', 'b', 'c'];
-const MAX_HEARTS = 3;
 const DISK_UNIT = 26;   // same as --disk-unit
 const BASE_H = 14;      // same as --base-height
 const PEG_HEIGHT = 260; // same as --peg-height
@@ -18,23 +17,20 @@ const newBtn = document.getElementById('newBtn');
 const solveBtn = document.getElementById('solveBtn');
 const skipBtn = document.getElementById('skipBtn');
 const statusEl = document.getElementById('status');
-const heartsEl = document.getElementById('hearts');
 const movesEl = document.getElementById('moves');
 const bestEl = document.getElementById('best');
 const overlayEl = document.getElementById('overlay');
-const speedBtns = document.querySelectorAll('.speed');
 const traceEl = document.getElementById('trace');
 
 let towers = { a: [], b: [], c: [] };
 let diskEls = new Map();
 let diskCount = 3;
-let hearts = MAX_HEARTS;
 let moves = 0;
 let selected = null;
 let busy = false;
 let locked = false;
 
-let stepMs = NORMAL_MS;  // time of one animation step (changed by speed buttons)
+const stepMs = NORMAL_MS;  // time of one animation step
 let skipping = false;    // true when the user pressed Skip
 
 const wait = ms => new Promise(r => setTimeout(r, ms));
@@ -78,16 +74,6 @@ function applyWidths() {
   const step = diskCount > 1 ? Math.min(14, (towerW - 10 - minW) / (diskCount - 1)) : 0;
   for (const [id, el] of diskEls) {
     el.style.width = (minW + (sizeOf(id) - 1) * step) + 'px';
-  }
-}
-
-function renderHearts() {
-  heartsEl.innerHTML = '';
-  for (let i = 0; i < MAX_HEARTS; i++) {
-    const s = document.createElement('span');
-    s.textContent = '♥';
-    if (i >= hearts) s.className = 'lost';
-    heartsEl.appendChild(s);
   }
 }
 
@@ -143,13 +129,11 @@ function startGame(n = readDiskCount()) {
   clearSelection();
   overlayEl.classList.add('hidden');
   overlayEl.innerHTML = '';
-  hearts = MAX_HEARTS;
   moves = 0;
   busy = false;
   locked = false;
   setDuration(NORMAL_MS);
   clearTrace();
-  renderHearts();
   setupTowers(n);
   updateHud();
   say('Move all disks to peg 3.');
@@ -185,8 +169,6 @@ async function tryMove(from, to) {
   const destTop = topOf(to);
 
   if (destTop && sizeOf(diskId) > sizeOf(destTop)) {
-    hearts--;
-    renderHearts();
     addTrace(from, to, true);
     diskEl.classList.add('shake');
     towerEl(to).classList.add('wrong');
@@ -197,7 +179,6 @@ async function tryMove(from, to) {
     diskEl.style.bottom = (BASE_H + (towers[from].length - 1) * DISK_UNIT) + 'px';
     clearSelection();
     await wait(NORMAL_MS);
-    if (hearts <= 0) gameOver();
     busy = false;
     return;
   }
@@ -224,13 +205,6 @@ async function tryMove(from, to) {
 function showOverlay(html) {
   overlayEl.innerHTML = html;
   overlayEl.classList.remove('hidden');
-}
-
-function gameOver() {
-  locked = true;
-  say('Game over.');
-  showOverlay('<div class="card"><h2>Game Over</h2><p>No lives left.</p>' +
-              '<button data-action="again">Try Again</button></div>');
 }
 
 function win() {
@@ -326,13 +300,6 @@ overlayEl.addEventListener('click', e => {
   if (action === 'again') startGame(diskCount);
   if (action === 'next') startGame(Math.min(10, diskCount + 1));
 });
-
-speedBtns.forEach(b => b.addEventListener('click', () => {
-  speedBtns.forEach(x => x.classList.remove('active'));
-  b.classList.add('active');
-  stepMs = parseInt(b.dataset.ms, 10);
-  if (busy && !skipBtn.disabled) setDuration(stepMs); // works while solving
-}));
 
 skipBtn.addEventListener('click', () => { skipping = true; });
 newBtn.addEventListener('click', () => { if (!busy) startGame(); });

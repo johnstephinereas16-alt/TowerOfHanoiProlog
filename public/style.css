@@ -38,12 +38,8 @@ button:hover { filter: brightness(0.9); }
 #solveBtn { background: #f08c00; border-color: #c97300; }
 #skipBtn { background: #e03131; border-color: #b52424; }
 button:disabled { background: #aaa !important; border-color: #999; cursor: not-allowed; }
-button.speed { background: white; color: #6c4bd6; border-color: #6c4bd6; padding: 5px 9px; }
-button.speed.active { background: #6c4bd6; color: white; }
 
 .info { margin: 12px auto 4px; font-size: 1.05rem; background: white; display: inline-block; padding: 6px 16px; border-radius: 20px; border: 1px solid #c9b8f5; }
-#hearts { font-size: 1.3rem; color: #e03131; }
-#hearts .lost { color: #bbb; }
 
 .status { min-height: 1.3em; margin: 6px 0 14px; color: #444; }
 
